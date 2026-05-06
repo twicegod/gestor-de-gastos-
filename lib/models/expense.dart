@@ -5,6 +5,7 @@ class Expense {
   final String categoryId;
   final DateTime date;
   final String paymentMethod;
+  final bool isIncome;
   final String? note;
 
   Expense({
@@ -14,6 +15,7 @@ class Expense {
     required this.categoryId,
     required this.date,
     this.paymentMethod = 'Efectivo',
+    this.isIncome = false,
     this.note,
   });
 
@@ -26,6 +28,7 @@ class Expense {
         'categoryId': categoryId,
         'date': date.toIso8601String(),
         'paymentMethod': paymentMethod,
+        'isIncome': isIncome ? 1 : 0,
         'note': note,
       };
 
@@ -36,6 +39,7 @@ class Expense {
         categoryId: map['categoryId'],
         date: DateTime.parse(map['date']),
         paymentMethod: map['paymentMethod'] as String? ?? 'Efectivo',
+        isIncome: (map['isIncome'] ?? 0) == 1,
         note: map['note'],
       );
 }

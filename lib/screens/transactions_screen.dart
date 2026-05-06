@@ -22,6 +22,23 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   _SortOrder _sort = _SortOrder.dateDesc;
   DateTime _refDate = DateTime.now();
   String? _filterCatId;
+  bool _searching = false;
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searching = false;
+      _searchQuery = '';
+      _searchCtrl.clear();
+    });
+  }
 
   List<Expense> _filter(List<Expense> all) {
     return all.where((e) {
@@ -114,18 +131,49 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
     final all = provider.allExpenses;
-    final filtered = _filter(all);
+    final periodFiltered = _filter(all);
+    final filtered = _searchQuery.isEmpty
+        ? periodFiltered
+        : periodFiltered.where((e) {
+            final q = _searchQuery.toLowerCase();
+            final catName = provider.categoryById(e.categoryId)?.name.toLowerCase() ?? '';
+            return e.title.toLowerCase().contains(q) || catName.contains(q);
+          }).toList();
     final fmt = NumberFormat.currency(locale: 'es', symbol: '\$', decimalDigits: 0);
-    final total = filtered.fold(0.0, (s, e) => s + e.amount);
+    final totalGastos = filtered.where((e) => !e.isIncome).fold(0.0, (s, e) => s + e.amount);
+    final totalIngresos = filtered.where((e) => e.isIncome).fold(0.0, (s, e) => s + e.amount);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transacciones'),
+        leading: _searching
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _clearSearch,
+              )
+            : null,
+        title: _searching
+            ? TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Buscar por descripción o categoría...',
+                  hintStyle: TextStyle(color: Colors.white60),
+                  border: InputBorder.none,
+                ),
+                onChanged: (v) => setState(() => _searchQuery = v),
+              )
+            : const Text('Transacciones'),
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.filter_list, color: Colors.white),
-            onSelected: (v) {
-              setState(() {
+          if (!_searching)
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () => setState(() => _searching = true),
+            ),
+          if (!_searching)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.filter_list),
+              onSelected: (v) => setState(() {
                 switch (v) {
                   case 'dateDesc': _sort = _SortOrder.dateDesc;
                   case 'dateAsc': _sort = _SortOrder.dateAsc;
@@ -133,17 +181,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   case 'amountAsc': _sort = _SortOrder.amountAsc;
                   case 'clearCat': _filterCatId = null;
                 }
-              });
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'clearCat', child: Text('Todas las categorías')),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'dateDesc', child: Text('Fecha descendente')),
-              const PopupMenuItem(value: 'dateAsc', child: Text('Fecha ascendente')),
-              const PopupMenuItem(value: 'amountDesc', child: Text('Mayor monto')),
-              const PopupMenuItem(value: 'amountAsc', child: Text('Menor monto')),
-            ],
-          ),
+              }),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'clearCat', child: Text('Todas las categorías')),
+                PopupMenuDivider(),
+                PopupMenuItem(value: 'dateDesc', child: Text('Fecha descendente')),
+                PopupMenuItem(value: 'dateAsc', child: Text('Fecha ascendente')),
+                PopupMenuItem(value: 'amountDesc', child: Text('Mayor monto')),
+                PopupMenuItem(value: 'amountAsc', child: Text('Menor monto')),
+              ],
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -258,8 +305,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             child: const Row(
               children: [
                 Expanded(flex: 3, child: Text('Fecha', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                Expanded(flex: 3, child: Text('Categoría', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                Expanded(flex: 2, child: Text('Gastos', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: kExpense))),
+                Expanded(flex: 3, child: Text('Descripción', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 2, child: Text('Monto', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
               ],
             ),
           ),
@@ -296,47 +343,55 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           ),
                         ),
                         onDismissed: (_) => provider.deleteExpense(e.id),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(DateFormat('d MMM yyyy', 'es').format(e.date),
-                                        style: const TextStyle(fontSize: 12)),
-                                    Text(e.paymentMethod,
-                                        style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                  ],
+                        child: InkWell(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddExpenseScreen(expense: e),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(DateFormat('d MMM yyyy', 'es').format(e.date),
+                                          style: const TextStyle(fontSize: 12)),
+                                      Text(e.paymentMethod,
+                                          style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(e.title,
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis),
-                                    Text(cat?.name ?? '',
-                                        style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                  ],
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(e.title,
+                                          style: const TextStyle(fontSize: 12),
+                                          overflow: TextOverflow.ellipsis),
+                                      Text(cat?.name ?? '',
+                                          style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  fmt.format(e.amount),
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                      color: kExpense,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13),
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    '${e.isIncome ? '+' : '-'}${fmt.format(e.amount)}',
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                        color: e.isIncome ? kIncome : kExpense,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );
@@ -366,8 +421,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text('Total Gastos', style: TextStyle(fontSize: 11, color: kExpense)),
-                      Text(fmt.format(total),
+                      const Text('Gastos', style: TextStyle(fontSize: 11, color: kExpense)),
+                      Text(fmt.format(totalGastos),
                           style: const TextStyle(fontWeight: FontWeight.bold, color: kExpense)),
                     ],
                   ),
@@ -376,11 +431,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('Promedio', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      Text(
-                        filtered.isEmpty ? '\$0' : fmt.format(total / filtered.length),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      const Text('Ingresos', style: TextStyle(fontSize: 11, color: kIncome)),
+                      Text(fmt.format(totalIngresos),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: kIncome)),
                     ],
                   ),
                 ),

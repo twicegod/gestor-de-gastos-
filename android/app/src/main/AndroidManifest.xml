@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="gestor_de_gastos"
+        android:label="Gestor de Gastos"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity

@@ -7,7 +7,9 @@ import '../models/category.dart';
 import '../providers/expense_provider.dart';
 
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({super.key});
+  final Expense? expense; // si viene con gasto = modo edición
+
+  const AddExpenseScreen({super.key, this.expense});
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -21,6 +23,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   String? _selectedCategoryId;
   String _paymentMethod = 'Efectivo';
   DateTime _date = DateTime.now();
+  bool _isIncome = false;
+
+  bool get _isEditing => widget.expense != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.expense;
+    if (e != null) {
+      _amountCtrl.text = e.amount.toStringAsFixed(e.amount.truncateToDouble() == e.amount ? 0 : 2);
+      _titleCtrl.text = e.title;
+      _noteCtrl.text = e.note ?? '';
+      _selectedCategoryId = e.categoryId;
+      _paymentMethod = e.paymentMethod;
+      _date = e.date;
+      _isIncome = e.isIncome;
+    }
+  }
 
   @override
   void dispose() {
@@ -44,14 +64,59 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _showError('Selecciona una categoría');
       return;
     }
-    await context.read<ExpenseProvider>().addExpense(
-          title: _titleCtrl.text.trim(),
-          amount: amount,
-          categoryId: _selectedCategoryId!,
-          date: _date,
-          paymentMethod: _paymentMethod,
-          note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-        );
+    final provider = context.read<ExpenseProvider>();
+    if (_isEditing) {
+      await provider.updateExpense(Expense(
+        id: widget.expense!.id,
+        title: _titleCtrl.text.trim(),
+        amount: amount,
+        categoryId: _selectedCategoryId!,
+        date: _date,
+        paymentMethod: _paymentMethod,
+        isIncome: _isIncome,
+        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+      ));
+    } else {
+      await provider.addExpense(
+        title: _titleCtrl.text.trim(),
+        amount: amount,
+        categoryId: _selectedCategoryId!,
+        date: _date,
+        paymentMethod: _paymentMethod,
+        isIncome: _isIncome,
+        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+      );
+      // Alerta de presupuesto al agregar gasto
+      if (!_isIncome && mounted) {
+        final budget = provider.budgetForCategory(_selectedCategoryId!);
+        if (budget != null) {
+          final spent = provider.spentInCategory(_selectedCategoryId!);
+          if (spent >= budget.limit) {
+            final cat = provider.categoryById(_selectedCategoryId!);
+            await showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Row(children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text('Presupuesto superado'),
+                ]),
+                content: Text(
+                  'Has superado el presupuesto de ${cat?.name ?? 'esta categoría'}.\n'
+                  'Gastado: \$${spent.toStringAsFixed(0)} / Límite: \$${budget.limit.toStringAsFixed(0)}',
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Entendido'),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+      }
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -252,7 +317,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         : DateFormat('dd/MM/yyyy').format(_date);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Añadir Gasto')),
+      appBar: AppBar(title: Text(_isEditing ? 'Editar transacción' : 'Nueva transacción')),
       body: Column(
         children: [
           Expanded(
@@ -261,21 +326,50 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               children: [
                 const SizedBox(height: 8),
 
+                // Toggle GASTO / INGRESO
+                Center(
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        label: Text('GASTO'),
+                        icon: Icon(Icons.arrow_upward, size: 16),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        label: Text('INGRESO'),
+                        icon: Icon(Icons.arrow_downward, size: 16),
+                      ),
+                    ],
+                    selected: {_isIncome},
+                    onSelectionChanged: (s) => setState(() => _isIncome = s.first),
+                    style: ButtonStyle(
+                      iconColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return _isIncome ? kIncome : kExpense;
+                        }
+                        return null;
+                      }),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Campo monto
                 TextField(
                   controller: _amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: kExpense,
+                    color: _isIncome ? kIncome : kExpense,
                   ),
                   decoration: InputDecoration(
                     labelText: 'Monto',
                     labelStyle: const TextStyle(color: Colors.grey, fontSize: 14),
                     prefixText: '\$ ',
-                    prefixStyle: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold, color: kExpense),
+                    prefixStyle: TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.bold, color: _isIncome ? kIncome : kExpense),
                     border: const UnderlineInputBorder(),
                     focusedBorder: const UnderlineInputBorder(
                         borderSide: BorderSide(color: kPrimary, width: 2)),
@@ -418,8 +512,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               height: 50,
               child: FilledButton(
                 onPressed: _submit,
-                child: const Text('GUARDAR',
-                    style: TextStyle(fontSize: 16, letterSpacing: 1.2)),
+                child: Text(_isEditing ? 'ACTUALIZAR' : 'GUARDAR',
+                    style: const TextStyle(fontSize: 16, letterSpacing: 1.2)),
               ),
             ),
           ),

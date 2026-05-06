@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../main.dart';
 import '../providers/expense_provider.dart';
+import '../services/pdf_service.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
@@ -49,6 +50,17 @@ class ReportsScreen extends StatelessWidget {
             icon: const Icon(Icons.chevron_right),
             onPressed: () => provider.setFilterMonth(
                 DateTime(month.year, month.month + 1)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: 'Exportar PDF',
+            onPressed: total == 0
+                ? null
+                : () => PdfService.exportReport(
+                      expenses: provider.expenses,
+                      categories: provider.categories,
+                      month: month,
+                    ),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../main.dart';
 import '../providers/expense_provider.dart';
+import '../providers/theme_provider.dart';
 import '../models/expense.dart';
 import 'add_expense_screen.dart';
 
@@ -13,11 +14,14 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
     final expenses = provider.expenses;
-    final total = provider.totalCurrentMonth;
     final byCategory = provider.totalByCategory;
     final month = provider.filterMonth;
     final fmt = NumberFormat.currency(locale: 'es', symbol: '\$', decimalDigits: 0);
     final monthLabel = DateFormat('MMMM yyyy', 'es').format(month);
+
+    final totalIngresos = expenses.where((e) => e.isIncome).fold(0.0, (s, e) => s + e.amount);
+    final totalGastos = expenses.where((e) => !e.isIncome).fold(0.0, (s, e) => s + e.amount);
+    final balance = totalIngresos - totalGastos;
 
     return Scaffold(
       appBar: AppBar(
@@ -33,6 +37,13 @@ class DashboardScreen extends StatelessWidget {
             onPressed: () => provider.setFilterMonth(
                 DateTime(month.year, month.month + 1)),
           ),
+          Consumer<ThemeProvider>(
+            builder: (_, theme, __) => IconButton(
+              icon: Icon(theme.isDark ? Icons.light_mode : Icons.dark_mode),
+              tooltip: theme.isDark ? 'Modo claro' : 'Modo oscuro',
+              onPressed: theme.toggle,
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -41,15 +52,15 @@ class DashboardScreen extends StatelessWidget {
           MaterialPageRoute(builder: (_) => const AddExpenseScreen()),
         ),
         icon: const Icon(Icons.add),
-        label: const Text('Agregar gasto'),
+        label: const Text('Agregar'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Tarjeta total
+          // Encabezado del mes
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [kPrimary, kPrimaryDark],
@@ -68,19 +79,22 @@ class DashboardScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Total del mes',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
-                const SizedBox(height: 8),
-                Text(
-                  fmt.format(total),
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
                 Text(monthLabel,
-                    style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _MetricCard(label: 'Ingresos', value: fmt.format(totalIngresos), color: kIncome),
+                    const SizedBox(width: 8),
+                    _MetricCard(label: 'Gastos', value: fmt.format(totalGastos), color: kExpense),
+                    const SizedBox(width: 8),
+                    _MetricCard(
+                      label: 'Balance',
+                      value: fmt.format(balance),
+                      color: balance >= 0 ? kIncome : kExpense,
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -181,6 +195,43 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
+class _MetricCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _MetricCard({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+            const SizedBox(height: 2),
+            Text(value,
+                style: TextStyle(
+                    color: color == kIncome
+                        ? const Color(0xFFA5D6A7)
+                        : color == kExpense
+                            ? const Color(0xFFEF9A9A)
+                            : Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ExpenseTile extends StatelessWidget {
   final Expense expense;
   final NumberFormat fmt;
@@ -198,6 +249,12 @@ class _ExpenseTile extends StatelessWidget {
         side: BorderSide(color: Colors.grey[200]!),
       ),
       child: ListTile(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AddExpenseScreen(expense: expense),
+          ),
+        ),
         leading: CircleAvatar(
           backgroundColor: catColor.withValues(alpha: 0.15),
           child: Text(cat?.icon ?? '📦', style: const TextStyle(fontSize: 18)),
@@ -208,9 +265,11 @@ class _ExpenseTile extends StatelessWidget {
           style: const TextStyle(fontSize: 12),
         ),
         trailing: Text(
-          fmt.format(expense.amount),
-          style: const TextStyle(
-              fontWeight: FontWeight.bold, color: kExpense, fontSize: 14),
+          '${expense.isIncome ? '+' : '-'}${fmt.format(expense.amount)}',
+          style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: expense.isIncome ? kIncome : kExpense,
+              fontSize: 14),
         ),
       ),
     );

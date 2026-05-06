@@ -2,23 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'providers/expense_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/transactions_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/categories_screen.dart';
 import 'screens/budget_screen.dart';
 
-const kPrimary = Color(0xFF1565C0);
+const kPrimary     = Color(0xFF1565C0);
 const kPrimaryDark = Color(0xFF0D47A1);
-const kIncome = Color(0xFF2E7D32);
-const kExpense = Color(0xFFC62828);
+const kIncome      = Color(0xFF2E7D32);
+const kExpense     = Color(0xFFC62828);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es', null);
+
+  final themeProvider = ThemeProvider();
+  await themeProvider.init();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ExpenseProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ExpenseProvider()),
+        ChangeNotifierProvider.value(value: themeProvider),
+      ],
       child: const MyApp(),
     ),
   );
@@ -29,43 +37,64 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = context.watch<ThemeProvider>().mode;
     return MaterialApp(
       title: 'Gestor de Gastos',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: kPrimary,
-          brightness: Brightness.light,
+      themeMode: themeMode,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      home: const AppShell(),
+    );
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    return ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: kPrimary,
+        brightness: brightness,
+      ),
+      useMaterial3: true,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: kPrimary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
         ),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: kPrimary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: false,
-          titleTextStyle: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+        iconTheme: IconThemeData(color: Colors.white),
+        actionsIconTheme: IconThemeData(color: Colors.white),
+      ),
+      cardTheme: CardThemeData(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(
+            color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFEEEEEE),
           ),
-          iconTheme: IconThemeData(color: Colors.white),
-          actionsIconTheme: IconThemeData(color: Colors.white),
-        ),
-        navigationBarTheme: NavigationBarThemeData(
-          indicatorColor: kPrimary.withValues(alpha: 0.15),
-          labelTextStyle: WidgetStateProperty.all(
-            const TextStyle(fontSize: 11),
-          ),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: kPrimary,
-          foregroundColor: Colors.white,
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(backgroundColor: kPrimary),
         ),
       ),
-      home: const AppShell(),
+      scaffoldBackgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5),
+      navigationBarTheme: NavigationBarThemeData(
+        indicatorColor: kPrimary.withValues(alpha: 0.15),
+        labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 11)),
+        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: kPrimary,
+        foregroundColor: Colors.white,
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(backgroundColor: kPrimary),
+      ),
+      dividerTheme: DividerThemeData(
+        color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFEEEEEE),
+      ),
     );
   }
 }

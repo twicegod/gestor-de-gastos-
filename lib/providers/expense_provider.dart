@@ -62,6 +62,7 @@ class ExpenseProvider extends ChangeNotifier {
     required String categoryId,
     required DateTime date,
     String paymentMethod = 'Efectivo',
+    bool isIncome = false,
     String? note,
   }) async {
     final expense = Expense(
@@ -71,6 +72,7 @@ class ExpenseProvider extends ChangeNotifier {
       categoryId: categoryId,
       date: date,
       paymentMethod: paymentMethod,
+      isIncome: isIncome,
       note: note,
     );
     await _db.insertExpense(expense);
