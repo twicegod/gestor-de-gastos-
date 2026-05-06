@@ -1,0 +1,5 @@
+-keep class io.flutter.** { *; }
+-keep class io.flutter.plugins.** { *; }
+-keep class com.dexterous.** { *; }
+-keep class dev.fluttercommunity.** { *; }
+-dontwarn io.flutter.embedding.**
